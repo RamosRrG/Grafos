@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Case: Banco de Dados de Grafos</title>
+<style>
+:root{--bg:#f4f6fb;--fg:#1c2233;--mut:#5d6785;--edge:90,106,140;--a:#e8590c;--b:#1971c2;--res:#d6336c;--tp:#4c6ef5;--te:#2f9e44;--ti:#f08c00;--panel:rgba(255,255,255,.92);--code:#eef1f8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0f1a;--fg:#e6e9f2;--mut:#9aa5c4;--edge:120,140,190;--a:#ffa94d;--b:#4dabf7;--res:#ff6b9d;--tp:#748ffc;--te:#51cf66;--ti:#ffd43b;--panel:rgba(20,26,42,.92);--code:#0f1524}}
+:root[data-theme="dark"]{--bg:#0b0f1a;--fg:#e6e9f2;--mut:#9aa5c4;--edge:120,140,190;--a:#ffa94d;--b:#4dabf7;--res:#ff6b9d;--tp:#748ffc;--te:#51cf66;--ti:#ffd43b;--panel:rgba(20,26,42,.92);--code:#0f1524}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.leg{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:12px;display:flex;gap:12px;flex-wrap:wrap;font-size:13px;background:var(--panel);padding:6px 12px;border-radius:10px}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.panel{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:620px;background:var(--panel);border-radius:14px;padding:12px;font-size:14px;backdrop-filter:blur(8px);box-shadow:0 4px 24px rgba(0,0,0,.18)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+select{background:var(--code);color:var(--fg);border:1px solid rgba(128,128,160,.35);border-radius:8px;padding:6px 8px;font-size:14px;max-width:100%}
+pre{margin:0 0 8px;background:var(--code);padding:8px 10px;border-radius:8px;font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;color:var(--fg)}
+.res{line-height:1.45}.res b{color:var(--res)}.hint{color:var(--mut);font-size:12.5px;margin-top:6px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="leg"><span><i style="background:var(--tp)"></i>Pessoa</span><span><i style="background:var(--te)"></i>Empresa</span><span><i style="background:var(--ti)"></i>Interesse</span></div>
+<div class="panel">
+  <div class="row">
+    <select id="q">
+      <option value="1">1. Caminho mais curto</option>
+      <option value="2">2. Amigos de amigos</option>
+      <option value="3">3. Recomendação por interesses</option>
+      <option value="4">4. Colegas de empresa</option>
+    </select>
+    <select id="sa"></select>
+    <select id="sb"></select>
+  </div>
+  <pre id="cy"></pre>
+  <div class="res" id="out"></div>
+  <div class="hint" id="hint"></div>
+</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id),css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const R=rng(11);
+const pessoas=["Ana","Bruno","Carla","Diego","Elisa","Felipe","Gabi","Hugo","Iara","João","Karen","Lucas","Marta","Nando","Olivia","Paulo","Quésia","Rafa","Sara","Tiago","Ursula","Vitor","Wanda","Yuri"];
+const empresas=["TechSul","BancoAlfa","Saúde+","EduNova"],interesses=["Música","Futebol","Games","Viagens","Culinária"];
+const nodes=[],adj=[],ekeys=new Set(),edges=[];
+function dir(r){const u=R()*2-1,t=R()*6.283,s=Math.sqrt(1-u*u);return{x:r*s*Math.cos(t),y:r*u,z:r*s*Math.sin(t)}}
+pessoas.forEach(n=>nodes.push({t:'Pessoa',name:n,...dir(.7+R()*.3)}));
+empresas.forEach(n=>nodes.push({t:'Empresa',name:n,...dir(.3)}));
+interesses.forEach(n=>nodes.push({t:'Interesse',name:n,...dir(1.15)}));
+nodes.forEach(()=>adj.push([]));
+function link(a,b,rel){const k=Math.min(a,b)+'-'+Math.max(a,b);if(a===b||ekeys.has(k))return;ekeys.add(k);edges.push({a,b,rel});adj[a].push({to:b,rel});adj[b].push({to:a,rel})}
+const NP=pessoas.length;
+for(let i=0;i<NP;i++){link(i,(i+1)%NP,'AMIGO_DE');link(i,NP+Math.floor(R()*4),'TRABALHA_EM');link(i,NP+4+Math.floor(R()*5),'GOSTA_DE');link(i,NP+4+Math.floor(R()*5),'GOSTA_DE')}
+for(let k=0;k<14;k++)link(Math.floor(R()*NP),Math.floor(R()*NP),'AMIGO_DE');
+const nb=(a,rel)=>adj[a].filter(e=>e.rel===rel).map(e=>e.to);
+const nm=i=>nodes[i].name;
+
+// ---- consultas ----
+let hl={},hle=new Set();
+const ek=(a,b)=>Math.min(a,b)+'-'+Math.max(a,b);
+function run(){
+  hl={};hle=new Set();
+  const q=$('q').value,a=+$('sa').value,b=+$('sb').value,A=nm(a),B=nm(b);
+  $('sb').style.display=q==='1'?'':'none';
+  let cy,out,hint;
+  const E=(x,y)=>hle.add(ek(x,y));
+  if(q==='1'){
+    cy=`MATCH p = shortestPath(\n  (a:Pessoa {nome:'${A}'})-[:AMIGO_DE*]-(b:Pessoa {nome:'${B}'}))\nRETURN p`;
+    const prev={[a]:-1},Q=[a];
+    for(let h=0;h<Q.length;h++){const u=Q[h];if(u===b)break;for(const v of nb(u,'AMIGO_DE'))if(!(v in prev)){prev[v]=u;Q.push(v)}}
+    if(!(b in prev))out='Sem caminho.';
+    else{const p=[];for(let c=b;c!==-1;c=prev[c])p.push(c);p.reverse();
+      p.forEach((n,i)=>{hl[n]=i===0?'src':i===p.length-1?'res':'mid';if(i)E(p[i-1],n)});
+      out=`Caminho: <b>${p.map(nm).join(' → ')}</b> (${p.length-1} saltos)`}
+    hint='Em SQL: um JOIN recursivo (CTE) sobre a tabela de amizades, cada salto custa uma junção.';
+  }else if(q==='2'){
+    cy=`MATCH (a:Pessoa {nome:'${A}'})-[:AMIGO_DE]-(f)-[:AMIGO_DE]-(fof)\nWHERE fof <> a AND NOT (a)-[:AMIGO_DE]-(fof)\nRETURN DISTINCT fof`;
+    const fs=nb(a,'AMIGO_DE'),res=new Set();hl[a]='src';
+    fs.forEach(f=>{hl[f]='mid';E(a,f);nb(f,'AMIGO_DE').forEach(g=>{if(g!==a&&!fs.includes(g)){res.add(g);E(f,g)}})});
+    res.forEach(g=>hl[g]='res');
+    out=`Amigos de <b>${A}</b>: ${fs.map(nm).join(', ')}.<br>Amigos de amigos: <b>${[...res].map(nm).join(', ')||'nenhum'}</b>`;
+    hint='Em SQL: self-join duplo + NOT EXISTS. No grafo é só caminhar 2 passos a partir do nó.';
+  }else if(q==='3'){
+    cy=`MATCH (a:Pessoa {nome:'${A}'})-[:GOSTA_DE]->(i)<-[:GOSTA_DE]-(o:Pessoa)\nWHERE o <> a AND NOT (a)-[:AMIGO_DE]-(o)\nRETURN o.nome, count(i) AS emComum\nORDER BY emComum DESC`;
+    const fs=nb(a,'AMIGO_DE'),cnt={};hl[a]='src';
+    nb(a,'GOSTA_DE').forEach(i=>{hl[i]='mid';E(a,i);nb(i,'GOSTA_DE').forEach(o=>{if(o!==a&&!fs.includes(o)){cnt[o]=(cnt[o]||0)+1;E(i,o)}})});
+    const rank=Object.entries(cnt).sort((x,y)=>y[1]-x[1]);
+    rank.forEach(([o])=>hl[o]='res');
+    out=`Interesses de <b>${A}</b>: ${nb(a,'GOSTA_DE').map(nm).join(', ')}.<br>Sugestões de amizade: <b>${rank.slice(0,5).map(([o,c])=>`${nm(o)} (${c})`).join(', ')||'nenhuma'}</b>`;
+    hint='É o motor de "pessoas que você talvez conheça": padrão de relacionamento, não de colunas.';
+  }else{
+    cy=`MATCH (a:Pessoa {nome:'${A}'})-[:TRABALHA_EM]->(e:Empresa)<-[:TRABALHA_EM]-(c:Pessoa)\nWHERE c <> a\nRETURN e.nome, c.nome`;
+    const e=nb(a,'TRABALHA_EM')[0],cs=nb(e,'TRABALHA_EM').filter(x=>x!==a);
+    hl[a]='src';hl[e]='mid';E(a,e);cs.forEach(c=>{hl[c]='res';E(e,c)});
+    out=`<b>${A}</b> trabalha na <b>${nm(e)}</b> com: ${cs.map(nm).join(', ')}`;
+    hint='Empresas, pessoas e interesses convivem no mesmo grafo, sem tabelas separadas nem chaves estrangeiras.';
+  }
+  $('cy').textContent=cy;$('out').innerHTML=out;$('hint').textContent=hint;
+}
+pessoas.forEach((n,i)=>{$('sa').add(new Option(n,i));$('sb').add(new Option(n,i))});
+$('sa').value=0;$('sb').value=12;
+['q','sa','sb'].forEach(id=>$(id).onchange=run);
+
+// ---- render 3D ----
+let W,H,DPR,yaw=.5,pitch=.3,zoom=1,drag=null,hover=-1,moved=false;
+function resize(){DPR=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR}
+function proj(){const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),sc=Math.min(W,H*.8)*.4*zoom,f=3;
+  for(const n of nodes){let x=n.x*cy+n.z*sy,z=-n.x*sy+n.z*cy,y=n.y*cp-z*sp;z=n.y*sp+z*cp;const p=f/(f+z);n.sx=W/2+x*sc*p;n.sy=H*.38+y*sc*p;n.p=p;n.d=(z+1.2)/2.4}}
+const tcol={Pessoa:'--tp',Empresa:'--te',Interesse:'--ti'},rcol={src:'--a',mid:'--b',res:'--res'};
+function draw(t){
+  if(!drag)yaw+=.002;
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);proj();
+  const E=css('--edge'),anyHl=Object.keys(hl).length>0;
+  for(const e of edges){const p=nodes[e.a],q=nodes[e.b],on=hle.has(ek(e.a,e.b));
+    if(on){ctx.strokeStyle=css('--res');ctx.lineWidth=3;ctx.shadowColor=css('--res');ctx.shadowBlur=10}
+    else{ctx.strokeStyle=`rgba(${E},${(anyHl?.05:.1)+.22*(1-(p.d+q.d)/2)})`;ctx.lineWidth=1;ctx.shadowBlur=0}
+    ctx.beginPath();ctx.moveTo(p.sx,p.sy);ctx.lineTo(q.sx,q.sy);ctx.stroke()}
+  ctx.shadowBlur=0;
+  const ord=nodes.map((_,i)=>i).sort((a,b)=>nodes[b].d-nodes[a].d),labels=[];
+  for(let i of ord){const n=nodes[i],role=hl[i];
+    let r=(n.t==='Pessoa'?4:6)*n.p*1.4,col=css(tcol[n.t]),al=(anyHl?.3:.5)+.5*(1-n.d);
+    if(role){col=css(rcol[role]);r=role==='src'?10+Math.sin(t/250)*1.5:7;al=1;labels.push(i)}
+    if(i===hover){r+=3;al=1;if(!role)labels.push(i)}
+    ctx.globalAlpha=al;ctx.fillStyle=col;ctx.beginPath();ctx.arc(n.sx,n.sy,r,0,7);ctx.fill()}
+  ctx.globalAlpha=1;ctx.font='600 12px system-ui,sans-serif';ctx.fillStyle=css('--fg');ctx.textAlign='center';
+  labels.forEach(i=>ctx.fillText(nodes[i].name,nodes[i].sx,nodes[i].sy-14));
+  requestAnimationFrame(draw)}
+const pick=(x,y)=>{let b=-1,bd=300;nodes.forEach((n,i)=>{const d=(n.sx-x)**2+(n.sy-y)**2;if(d<bd){bd=d;b=i}});return b};
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};moved=false;cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointermove',e=>{if(drag){yaw+=(e.clientX-drag.x)*.006;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.clientY-drag.y)*.006));drag.x=e.clientX;drag.y=e.clientY}else hover=pick(e.clientX,e.clientY)});
+cv.addEventListener('pointerup',e=>{drag=null});
+cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.5,Math.min(2.5,zoom*(e.deltaY<0?1.08:.92)))},{passive:false});
+addEventListener('resize',resize);resize();run();requestAnimationFrame(draw);
+</script>
+</body>
+</html>
